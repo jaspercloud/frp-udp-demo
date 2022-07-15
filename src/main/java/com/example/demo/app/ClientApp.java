@@ -137,7 +137,7 @@ public class ClientApp implements InitializingBean {
                         DataDTO dataDTO = gson.fromJson(json, DataDTO.class);
                         System.out.println(String.format("revData: host=%s, port=%s, data=%s",
                                 udpPacket.getAddress().getHostAddress(), udpPacket.getPort(),
-                                dataDTO.getData()));
+                                new String(dataDTO.getData())));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -146,9 +146,10 @@ public class ClientApp implements InitializingBean {
         }).start();
         int i = 0;
         while (true) {
-            System.out.println(String.format("sendData: %s:%d", host, port));
+            String data = "data" + i++;
+            System.out.println(String.format("sendData: %s:%d data=%s", host, port, data));
             DataDTO dataDTO = new DataDTO();
-            dataDTO.setData(("data" + i++).getBytes());
+            dataDTO.setData(data.getBytes());
             UdpPacket udpPacket = new UdpPacket(gson.toJson(dataDTO).getBytes());
             udpPacket.send(client, host, port);
             Thread.sleep(1000L);
