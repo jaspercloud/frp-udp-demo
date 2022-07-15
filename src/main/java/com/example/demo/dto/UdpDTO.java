@@ -6,6 +6,7 @@ public class UdpDTO {
     public static final String ConnectResp = "connectResp";
     public static final String Ping = "ping";
     public static final String Transmit = "transmit";
+    public static final String Data = "data";
 
     private String type;
 
