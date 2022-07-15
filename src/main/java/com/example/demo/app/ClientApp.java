@@ -89,8 +89,6 @@ public class ClientApp implements InitializingBean {
                         TransmitDTO transmitDTO = new TransmitDTO();
                         transmitDTO.setTransmitHost(host);
                         transmitDTO.setTransmitPort(port);
-                        transmitDTO.setTargetHost(connectRespDTO.getHost());
-                        transmitDTO.setTargetPort(connectRespDTO.getPort());
                         UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
                         udpPacket.send(client, serverHost, serverPort);
                     }
