@@ -29,17 +29,15 @@ public class ServerApp implements InitializingBean {
 
     private void runUdpServer() throws Exception {
         DatagramSocket server = new DatagramSocket(port);
-        byte[] data = new byte[1024];
+        byte[] data = new byte[1450];
         DatagramPacket packet = new DatagramPacket(data, data.length);
         while (true) {
             server.receive(packet);
             String host = packet.getAddress().getHostAddress();
             int port = packet.getPort();
-            String text = new String(packet.getData(), 0, packet.getLength());
-            System.out.println(String.format("host=%s, port=%s, text=%s", host, port, text));
+            System.out.println(String.format("host=%s, port=%s", host, port));
 
-            //response
-            byte[] bytes = text.getBytes();
+            byte[] bytes = String.format("%s:%d", host, port).getBytes();
             InetSocketAddress remote = new InetSocketAddress(host, port);
             server.send(new DatagramPacket(bytes, bytes.length, remote));
         }

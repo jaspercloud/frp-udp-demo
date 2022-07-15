@@ -11,56 +11,107 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @RestController
 @ConditionalOnProperty(value = "app.type", havingValue = "client")
 @Configuration
 public class ClientApp implements InitializingBean {
 
-    @Value("${udp.client.host}")
+    @Value("${udp.connect.host}")
     private String host;
 
-    @Value("${udp.client.port}")
+    @Value("${udp.server.port}")
     private int port;
 
-    private DatagramSocket client;
+    private ExecutorService executorService;
+    private DatagramSocket server;
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        client = new DatagramSocket();
+        executorService = Executors.newCachedThreadPool();
+        server = new DatagramSocket();
+        {
+            byte[] bytes = "hello".getBytes();
+            InetSocketAddress remote = new InetSocketAddress(host, port);
+            server.send(new DatagramPacket(bytes, bytes.length, remote));
+        }
+        {
+            byte[] bytes = new byte[1450];
+            DatagramPacket packet = new DatagramPacket(bytes, bytes.length);
+            server.receive(packet);
+            String text = new String(packet.getData(), 0, packet.getLength());
+            System.out.println("remote: " + text);
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (true) {
+                    try {
+                        byte[] bytes = new byte[1450];
+                        DatagramPacket packet = new DatagramPacket(bytes, bytes.length);
+                        server.receive(packet);
+                        server.send(packet);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }).start();
+    }
+
+    @PostMapping("/connect")
+    public void connect(@RequestParam("host") String host,
+                        @RequestParam("port") int port,
+                        @RequestParam("retry") int retry) throws Exception {
         new Thread(() -> {
             try {
-                runUdpClient();
+                for (int i = 0; i < retry; i++) {
+                    DatagramSocket client = new DatagramSocket();
+                    byte[] bytes = "hello".getBytes();
+                    InetSocketAddress remote = new InetSocketAddress(host, port);
+                    client.send(new DatagramPacket(bytes, bytes.length, remote));
+                    Future<DatagramPacket> future = executorService.submit(new Callable<DatagramPacket>() {
+                        @Override
+                        public DatagramPacket call() throws Exception {
+                            byte[] bytes = new byte[1450];
+                            DatagramPacket packet = new DatagramPacket(bytes, bytes.length);
+                            client.receive(packet);
+                            return packet;
+                        }
+                    });
+                    try {
+                        future.get(3000, TimeUnit.MILLISECONDS);
+                        loop(client, remote);
+                    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    }
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }).start();
     }
 
-    private void runUdpClient() throws Exception {
-        {
-            byte[] bytes = "test".getBytes();
-            InetSocketAddress remote = new InetSocketAddress(host, port);
-            client.send(new DatagramPacket(bytes, bytes.length, remote));
-        }
-        {
-            byte[] data = new byte[1024];
-            DatagramPacket packet = new DatagramPacket(data, data.length);
-            while (true) {
-                client.receive(packet);
-                String host = packet.getAddress().getHostAddress();
-                int port = packet.getPort();
-                String text = new String(packet.getData(), 0, packet.getLength());
-                System.out.println(String.format("host=%s, port=%s, text=%s", host, port, text));
+    private void loop(DatagramSocket client, InetSocketAddress remote) throws Exception {
+        while (true) {
+            {
+                byte[] bytes = "hello".getBytes();
+                client.send(new DatagramPacket(bytes, bytes.length, remote));
             }
+            {
+                byte[] bytes = new byte[1450];
+                DatagramPacket packet = new DatagramPacket(bytes, bytes.length);
+                client.receive(packet);
+                String text = new String(packet.getData(), 0, packet.getLength());
+                System.out.println("rev: " + text);
+            }
+            Thread.sleep(1000L);
         }
-    }
-
-    @PostMapping("/connect")
-    public void connect(@RequestParam("host") String host,
-                        @RequestParam("port") int port) throws Exception {
-        byte[] bytes = "test".getBytes();
-        InetSocketAddress remote = new InetSocketAddress(host, port);
-        client.send(new DatagramPacket(bytes, bytes.length, remote));
     }
 }
