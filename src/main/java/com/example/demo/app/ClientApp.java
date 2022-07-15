@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.net.DatagramSocket;
 import java.util.concurrent.*;
 
@@ -108,6 +109,7 @@ public class ClientApp implements InitializingBean {
                     });
                     try {
                         future.get(200, TimeUnit.MILLISECONDS);
+                        System.out.println(String.format("Connected: %s:%d", host, port));
                         loop(client, host, port);
                     } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     }
@@ -119,16 +121,23 @@ public class ClientApp implements InitializingBean {
     }
 
     private void loop(DatagramSocket client, String host, int port) throws Exception {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (true) {
+                    try {
+                        UdpPacket udpPacket = UdpPacket.receive(client, 1450);
+                        System.out.println(String.format("revPing: host=%s, port=%s", udpPacket.getAddress().getHostAddress(), udpPacket.getPort()));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }).start();
         while (true) {
-            {
-                System.out.println(String.format("sendPing: %s:%d", host, port));
-                UdpPacket udpPacket = new UdpPacket(gson.toJson(new PingDTO()).getBytes());
-                udpPacket.send(client, host, port);
-            }
-            {
-                UdpPacket udpPacket = UdpPacket.receive(client, 1450);
-                System.out.println(String.format("revPing: host=%s, port=%s", udpPacket.getAddress().getHostAddress(), udpPacket.getPort()));
-            }
+            System.out.println(String.format("sendPing: %s:%d", host, port));
+            UdpPacket udpPacket = new UdpPacket(gson.toJson(new PingDTO()).getBytes());
+            udpPacket.send(client, host, port);
             Thread.sleep(1000L);
         }
     }
