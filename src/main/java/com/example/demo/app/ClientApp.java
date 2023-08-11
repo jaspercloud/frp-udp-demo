@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.util.concurrent.*;
 
 @RestController
@@ -25,36 +26,37 @@ public class ClientApp implements InitializingBean {
     @Value("${udp.server.port}")
     private int serverPort;
 
+    private DatagramSocket client;
     private ExecutorService executorService;
     private Gson gson = new Gson();
 
     @Override
     public void afterPropertiesSet() throws Exception {
         executorService = Executors.newCachedThreadPool();
-        DatagramSocket client = new DatagramSocket(1080);
-        for (int i = 0; i < 5; i++) {
-            ConnectReqDTO udpDTO = new ConnectReqDTO();
-            UdpPacket udpPacket = new UdpPacket(gson.toJson(udpDTO).getBytes());
-            udpPacket.send(client, serverHost, serverPort);
-            UdpPacket revUdpPacket = UdpPacket.receive(client, 1450);
-            byte[] data = revUdpPacket.getData();
-            String json = new String(data);
-            ConnectRespDTO connectRespDTO = gson.fromJson(json, ConnectRespDTO.class);
-            System.out.println(String.format("remote: host=%s, port=%s, localPort=%s",
-                    connectRespDTO.getHost(), connectRespDTO.getPort(), client.getLocalPort()));
-        }
+        client = new DatagramSocket();
+        client.setReuseAddress(true);
+        ConnectReqDTO udpDTO = new ConnectReqDTO();
+        UdpPacket udpPacket = new UdpPacket(gson.toJson(udpDTO).getBytes());
+        udpPacket.send(client, serverHost, serverPort);
+        UdpPacket revUdpPacket = UdpPacket.receive(client, 1450);
+        byte[] data = revUdpPacket.getData();
+        String json = new String(data);
+        ConnectRespDTO connectRespDTO = gson.fromJson(json, ConnectRespDTO.class);
+        System.out.println(String.format("remote: localPort=%s, host=%s, port=%s",
+                client.getLocalPort(), connectRespDTO.getHost(), connectRespDTO.getPort()));
         new Thread(new Runnable() {
             @Override
             public void run() {
                 while (true) {
                     try {
-                        UdpPacket udpPacket = new UdpPacket(gson.toJson(new BeatDTO()).getBytes());
+                        BeatDTO reqHeart = new BeatDTO();
+                        UdpPacket udpPacket = new UdpPacket(gson.toJson(reqHeart).getBytes());
                         udpPacket.send(client, serverHost, serverPort);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                     try {
-                        Thread.sleep(1000L);
+                        Thread.sleep(5000L);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -72,7 +74,9 @@ public class ClientApp implements InitializingBean {
                         UdpDTO udpDTO = gson.fromJson(json, UdpDTO.class);
                         switch (udpDTO.getType()) {
                             case UdpDTO.Ping: {
-                                System.out.println(String.format("revPing: host=%s, port=%s", revUdpPacket.getAddress().getHostAddress(), revUdpPacket.getPort()));
+                                PingDTO pingDTO = gson.fromJson(json, PingDTO.class);
+                                System.out.println(String.format("revPing: host=%s, port=%s uuid=%s",
+                                        revUdpPacket.getAddress().getHostAddress(), revUdpPacket.getPort(), pingDTO.getUuid()));
                                 UdpPacket udpPacket = new UdpPacket(data);
                                 udpPacket.send(client, revUdpPacket.getAddress().getHostAddress(), revUdpPacket.getPort());
                                 break;
@@ -86,9 +90,15 @@ public class ClientApp implements InitializingBean {
                             case UdpDTO.Transmit: {
                                 TransmitDTO transmitDTO = gson.fromJson(json, TransmitDTO.class);
                                 System.out.println(String.format("transmit: host=%s, port=%s", transmitDTO.getTargetHost(), transmitDTO.getTargetPort()));
-                                UdpPacket udpPacket = new UdpPacket(data);
+                                PingDTO pingDTO = new PingDTO();
+                                UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
                                 udpPacket.send(client, transmitDTO.getTargetHost(), transmitDTO.getTargetPort());
                                 break;
+                            }
+                            case UdpDTO.Beat: {
+                                BeatDTO beatDTO = gson.fromJson(json, BeatDTO.class);
+                                String uuid = beatDTO.getUuid();
+//                                System.out.println(String.format("recv: heart=%s", uuid));
                             }
                         }
                     } catch (Exception e) {
@@ -99,13 +109,46 @@ public class ClientApp implements InitializingBean {
         }).start();
     }
 
+    @PostMapping("/once")
+    public void once(@RequestParam("host") String host,
+                     @RequestParam("port") int port) throws Exception {
+        System.out.println("localPort=" + client.getLocalPort());
+        //sendTarget
+        {
+            PingDTO pingDTO = new PingDTO();
+            UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
+            udpPacket.send(client, host, port);
+            System.out.println(String.format("sendConnectPing: %s:%d uuid=%s", host, port, pingDTO.getUuid()));
+        }
+        //sendTransmit
+        {
+            TransmitDTO transmitDTO = new TransmitDTO();
+            transmitDTO.setTransmitHost(host);
+            transmitDTO.setTransmitPort(port);
+            UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
+            udpPacket.send(client, serverHost, serverPort);
+        }
+        Future<UdpPacket> future = executorService.submit(new Callable<UdpPacket>() {
+            @Override
+            public UdpPacket call() throws Exception {
+                UdpPacket udpPacket = UdpPacket.receive(client, 1450);
+                return udpPacket;
+            }
+        });
+        try {
+            future.get(1000L, TimeUnit.MILLISECONDS);
+            System.out.println(String.format("Connected: %s:%d", host, port));
+        } catch (TimeoutException e) {
+            System.out.println(String.format("ConnectTimeout: %s:%d", host, port));
+        }
+    }
+
     @PostMapping("/connect")
     public void connect(@RequestParam("host") String host,
                         @RequestParam("port") int port,
                         @RequestParam("retry") int retry) throws Exception {
         new Thread(() -> {
             try {
-                DatagramSocket client = new DatagramSocket(1080);
                 System.out.println("localPort=" + client.getLocalPort());
                 for (int i = 0; i < retry; i++) {
                     //sendTransmit
@@ -118,9 +161,10 @@ public class ClientApp implements InitializingBean {
                     }
                     //sendTarget
                     {
-                        UdpPacket udpPacket = new UdpPacket(gson.toJson(new PingDTO()).getBytes());
-                        udpPacket.send(client, host, i);
-                        System.out.println(String.format("sendConnectPing: i=%s %s:%d", i, host, i));
+                        PingDTO pingDTO = new PingDTO();
+                        UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
+                        udpPacket.send(client, host, port);
+                        System.out.println(String.format("sendConnectPing: i=%s %s:%d uuid=%s", i, host, port, pingDTO.getUuid()));
                     }
                     Future<UdpPacket> future = executorService.submit(new Callable<UdpPacket>() {
                         @Override
@@ -132,11 +176,10 @@ public class ClientApp implements InitializingBean {
                     try {
                         future.get(100L, TimeUnit.MILLISECONDS);
                         System.out.println(String.format("Connected: %s:%d", host, port));
-                        loop(client, host, port);
+//                        loop(client, host, port);
                     } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     }
                 }
-                client.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
