@@ -33,7 +33,7 @@ public class ClientApp implements InitializingBean {
     @Override
     public void afterPropertiesSet() throws Exception {
         executorService = Executors.newCachedThreadPool();
-        client = new DatagramSocket();
+        client = new DatagramSocket(51080);
         client.setReuseAddress(true);
         ConnectReqDTO udpDTO = new ConnectReqDTO();
         UdpPacket udpPacket = new UdpPacket(gson.toJson(udpDTO).getBytes());
@@ -157,6 +157,13 @@ public class ClientApp implements InitializingBean {
                 while (true) {
                     System.out.println(String.format("local: localPort=%s, host=%s, port=%s",
                             client.getLocalPort(), connectRespDTO.getHost(), connectRespDTO.getPort()));
+                    //sendTarget
+                    {
+                        PingDTO pingDTO = new PingDTO();
+                        UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
+                        System.out.println(String.format("sendTarget: %s:%d", host, port));
+                        udpPacket.send(client, host, port);
+                    }
                     //sendTransmit
                     {
                         TransmitDTO transmitDTO = new TransmitDTO();
@@ -165,13 +172,6 @@ public class ClientApp implements InitializingBean {
                         UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
                         System.out.println(String.format("sendTransmit: %s:%d", serverHost, serverPort));
                         udpPacket.send(client, serverHost, serverPort);
-                    }
-                    //sendTarget
-                    {
-                        PingDTO pingDTO = new PingDTO();
-                        UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
-                        System.out.println(String.format("sendTarget: %s:%d", host, port));
-                        udpPacket.send(client, host, port);
                     }
                     Thread.sleep(100L);
                 }
