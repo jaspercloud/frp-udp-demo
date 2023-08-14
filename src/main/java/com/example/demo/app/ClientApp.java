@@ -77,7 +77,9 @@ public class ClientApp implements InitializingBean {
                                 PingDTO pingDTO = gson.fromJson(json, PingDTO.class);
                                 System.out.println(String.format("revPing: host=%s, port=%s uuid=%s",
                                         revUdpPacket.getAddress().getHostAddress(), revUdpPacket.getPort(), pingDTO.getUuid()));
-                                UdpPacket udpPacket = new UdpPacket(gson.toJson(new PongDTO()).getBytes());
+                                PongDTO pongDTO = new PongDTO();
+                                pongDTO.setUuid(pingDTO.getUuid());
+                                UdpPacket udpPacket = new UdpPacket(gson.toJson(pongDTO).getBytes());
                                 udpPacket.send(client, revUdpPacket.getAddress().getHostAddress(), revUdpPacket.getPort());
                                 break;
                             }
@@ -158,7 +160,7 @@ public class ClientApp implements InitializingBean {
         {
             PingDTO pingDTO = new PingDTO();
             UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
-            System.out.println(String.format("sendTarget: %s:%d", host, port));
+            System.out.println(String.format("sendTarget: %s:%d uuid=%s", host, port, pingDTO.getUuid()));
             udpPacket.send(client, host, port);
         }
         //sendTransmit
@@ -183,7 +185,7 @@ public class ClientApp implements InitializingBean {
         //sendTarget
         PingDTO pingDTO = new PingDTO();
         UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
-        System.out.println(String.format("sendTarget: %s:%d", host, port));
+        System.out.println(String.format("sendTarget: %s:%d uuid=%s", host, port, pingDTO.getUuid()));
         udpPacket.send(client, host, port);
         Thread.sleep(1000L);
     }

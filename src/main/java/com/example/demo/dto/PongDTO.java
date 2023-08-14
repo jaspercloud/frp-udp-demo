@@ -10,6 +10,10 @@ public class PongDTO extends UdpDTO {
         return uuid;
     }
 
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
+    }
+
     public PongDTO() {
         super(UdpDTO.Pong);
     }
