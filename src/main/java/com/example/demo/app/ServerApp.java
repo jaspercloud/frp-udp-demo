@@ -51,12 +51,9 @@ public class ServerApp implements InitializingBean {
                 }
                 case UdpDTO.Transmit: {
                     TransmitDTO transmitDTO = gson.fromJson(json, TransmitDTO.class);
-                    transmitDTO.setTargetHost(revUdpPacket.getAddress().getHostAddress());
-                    transmitDTO.setTargetPort(revUdpPacket.getPort());
-                    System.out.println(String.format("Transmit: req=%s:%d, %s:%d->%s:%d",
-                            revUdpPacket.getAddress().getHostAddress(), revUdpPacket.getPort(),
-                            transmitDTO.getTransmitHost(), transmitDTO.getTransmitPort(),
-                            transmitDTO.getTargetHost(), transmitDTO.getTargetPort()));
+                    System.out.println(String.format("Transmit: %s:%d->%s:%d",
+                            transmitDTO.getTargetHost(), transmitDTO.getTargetPort(),
+                            transmitDTO.getTransmitHost(), transmitDTO.getTransmitPort()));
                     UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
                     udpPacket.send(server, transmitDTO.getTransmitHost(), transmitDTO.getTransmitPort());
                     break;
