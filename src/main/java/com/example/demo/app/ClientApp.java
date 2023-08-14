@@ -33,7 +33,7 @@ public class ClientApp implements InitializingBean {
     @Override
     public void afterPropertiesSet() throws Exception {
         executorService = Executors.newCachedThreadPool();
-        client = new DatagramSocket(51080);
+        client = new DatagramSocket();
         client.setReuseAddress(true);
         ConnectReqDTO udpDTO = new ConnectReqDTO();
         UdpPacket udpPacket = new UdpPacket(gson.toJson(udpDTO).getBytes());
@@ -152,32 +152,55 @@ public class ClientApp implements InitializingBean {
     @PostMapping("/connect")
     public void connect(@RequestParam("host") String host,
                         @RequestParam("port") int port) throws Exception {
-        new Thread(() -> {
-            try {
-                while (true) {
-                    System.out.println(String.format("local: localPort=%s, host=%s, port=%s",
-                            client.getLocalPort(), connectRespDTO.getHost(), connectRespDTO.getPort()));
-                    //sendTarget
-                    {
-                        PingDTO pingDTO = new PingDTO();
-                        UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
-                        System.out.println(String.format("sendTarget: %s:%d", host, port));
-                        udpPacket.send(client, host, port);
-                    }
-                    //sendTransmit
-                    {
-                        TransmitDTO transmitDTO = new TransmitDTO();
-                        transmitDTO.setTransmitHost(host);
-                        transmitDTO.setTransmitPort(port);
-                        UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
-                        System.out.println(String.format("sendTransmit: %s:%d", serverHost, serverPort));
-                        udpPacket.send(client, serverHost, serverPort);
-                    }
-                    Thread.sleep(100L);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
+        System.out.println(String.format("local: localPort=%s, host=%s, port=%s",
+                client.getLocalPort(), connectRespDTO.getHost(), connectRespDTO.getPort()));
+        //sendTarget
+        {
+            PingDTO pingDTO = new PingDTO();
+            UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
+            System.out.println(String.format("sendTarget: %s:%d", host, port));
+            udpPacket.send(client, host, port);
+        }
+        //sendTransmit
+        {
+            TransmitDTO transmitDTO = new TransmitDTO();
+            transmitDTO.setTransmitHost(host);
+            transmitDTO.setTransmitPort(port);
+            transmitDTO.setTargetHost(connectRespDTO.getHost());
+            transmitDTO.setTargetPort(connectRespDTO.getPort());
+            UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
+            System.out.println(String.format("sendTransmit: %s:%d", serverHost, serverPort));
+            udpPacket.send(client, serverHost, serverPort);
+        }
+        Thread.sleep(1000L);
+    }
+
+    @PostMapping("/sendTarget")
+    public void sendTarget(@RequestParam("host") String host,
+                           @RequestParam("port") int port) throws Exception {
+        System.out.println(String.format("local: localPort=%s, host=%s, port=%s",
+                client.getLocalPort(), connectRespDTO.getHost(), connectRespDTO.getPort()));
+        //sendTarget
+        PingDTO pingDTO = new PingDTO();
+        UdpPacket udpPacket = new UdpPacket(gson.toJson(pingDTO).getBytes());
+        System.out.println(String.format("sendTarget: %s:%d", host, port));
+        udpPacket.send(client, host, port);
+        Thread.sleep(1000L);
+    }
+
+    @PostMapping("/sendTransmit")
+    public void sendTransmit(@RequestParam("host") String host,
+                             @RequestParam("port") int port) throws Exception {
+        System.out.println(String.format("local: localPort=%s, host=%s, port=%s",
+                client.getLocalPort(), connectRespDTO.getHost(), connectRespDTO.getPort()));
+        TransmitDTO transmitDTO = new TransmitDTO();
+        transmitDTO.setTransmitHost(host);
+        transmitDTO.setTransmitPort(port);
+        transmitDTO.setTargetHost(connectRespDTO.getHost());
+        transmitDTO.setTargetPort(connectRespDTO.getPort());
+        UdpPacket udpPacket = new UdpPacket(gson.toJson(transmitDTO).getBytes());
+        System.out.println(String.format("sendTransmit: %s:%d", serverHost, serverPort));
+        udpPacket.send(client, serverHost, serverPort);
+        Thread.sleep(1000L);
     }
 }
